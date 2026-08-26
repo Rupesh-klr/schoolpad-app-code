@@ -1,0 +1,63 @@
+{
+  "cli": {
+    "version": ">= 5.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_BASE": "http://10.0.2.2:8100"
+      }
+    },
+
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE": "https://api.example.com"
+      }
+    },
+
+    "production": {
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE": "https://api.example.com"
+      }
+    }
+  },
+
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "../google-play-service-account.json",
+        "track": "internal"
+      },
+      "ios": {
+        "appleId": "REPLACE_WITH_APPLE_ID",
+        "ascAppId": "REPLACE_WITH_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId": "REPLACE_WITH_TEAM_ID"
+      }
+    }
+  },
+
+  "//": [
+    "preview builds an APK you can sideload for testing; production builds an",
+    "AAB, which is the only format Play accepts for new releases. Both profiles",
+    "exist because you cannot install an AAB on a device directly, and finding",
+    "that out after a 20-minute build is a bad afternoon.",
+    "",
+    "serviceAccountKeyPath points outside the repo on purpose. That file is a",
+    "Play publishing credential and .gitignore is not a strong enough guarantee",
+    "for it."
+  ]
+}

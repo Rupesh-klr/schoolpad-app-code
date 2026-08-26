@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Signing options for `xcodebuild -exportArchive` (see scripts/ios-build.sh).
+
+  Replace REPLACE_WITH_TEAM_ID with your Apple Developer team id — the ten
+  characters shown at developer.apple.com → Membership.
+
+  method:
+    app-store-connect  submitting to TestFlight or the App Store
+    ad-hoc             a build for specific registered devices
+    development        a debug build for your own devices
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>method</key>
+  <string>app-store-connect</string>
+
+  <key>teamID</key>
+  <string>REPLACE_WITH_TEAM_ID</string>
+
+  <key>signingStyle</key>
+  <string>automatic</string>
+
+  <key>uploadSymbols</key>
+  <true/>
+
+  <!-- Bitcode was removed in Xcode 14 and leaving it on breaks the export. -->
+  <key>compileBitcode</key>
+  <false/>
+
+  <key>destination</key>
+  <string>export</string>
+</dict>
+</plist>

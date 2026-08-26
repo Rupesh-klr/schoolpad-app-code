@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.pnpm-store/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+.metro-health-check*
+
+# Generated native projects.
+#
+# `expo prebuild` regenerates both from app.json, so committing them means every
+# config change has to be made twice and the two copies drift. Commit them only
+# if you start hand-editing native code, and delete these two lines when you do.
+/ios
+/android
+
+# Native signing material — the one category that must never be committed.
+# An upload key in git history is an upload key you have to rotate with Google.
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.cer
+*.certSigningRequest
+google-services.json
+GoogleService-Info.plist
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+*.apk
+*.aab
+*.ipa
+*.app
+*.dSYM.zip
+build/
+release/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# TypeScript / tooling
+*.tsbuildinfo
+coverage/
