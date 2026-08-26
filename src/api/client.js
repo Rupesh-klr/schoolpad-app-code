@@ -203,6 +203,25 @@ export const api = {
     deleteItem: (id) => del(`/api/content/items/${id}`),
   },
 
+  /**
+   * Documents and notices.
+   *
+   * `create` and `update` take FormData because a document may carry a file.
+   * The request helper leaves Content-Type alone for FormData — fetch has to
+   * set it itself, since it carries the multipart boundary.
+   */
+  documents: {
+    feed: (params) => get(`/api/documents/feed${qs(params)}`),
+    unreadCount: () => get('/api/documents/unread-count'),
+    markRead: (id) => post(`/api/documents/${id}/read`),
+
+    list: (params) => get(`/api/documents${qs(params)}`),
+    create: (formData) => request('POST', '/api/documents', formData, { isForm: true }),
+    update: (id, payload) => put(`/api/documents/${id}`, payload),
+    remove: (id) => del(`/api/documents/${id}`),
+    audiencePreview: (params) => get(`/api/documents/audience-preview${qs(params)}`),
+  },
+
   admin: {
     dashboard: () => get('/api/admin/dashboard'),
     users: () => get('/api/admin/users'),

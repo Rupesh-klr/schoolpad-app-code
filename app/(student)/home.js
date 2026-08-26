@@ -22,16 +22,22 @@ export default function Home() {
   const { user, signOut } = useAuth();
 
   const [data, setData] = useState(null);
+  const [unread, setUnread] = useState(0);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
+    // Separate awaits: a failing notices count must not blank the whole home
+    // screen, and a student with no class still deserves their notices badge.
     try {
       setData(await api.content.mine());
       setError('');
     } catch (err) {
       setError(err.message);
     }
+    api.documents.unreadCount()
+      .then((r) => setUnread(r.unread))
+      .catch(() => setUnread(0));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -57,7 +63,19 @@ export default function Home() {
             {user?.schoolName ? `${user.schoolName} · ` : ''}Class {data?.classLevel ?? user?.classLevel ?? '—'}
           </Text>
         </View>
-        <Pill label="Active" tone="active" />
+        <Pressable
+          onPress={() => router.push('/(student)/notices')}
+          accessibilityRole="button"
+          accessibilityLabel={unread ? `Notices, ${unread} unread` : 'Notices'}
+          style={styles.bell}
+        >
+          <Text style={styles.bellIcon}>📢</Text>
+          {unread > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unread > 9 ? '9+' : unread}</Text>
+            </View>
+          )}
+        </Pressable>
       </View>
 
       {continueItem && (
@@ -160,4 +178,17 @@ const styles = StyleSheet.create({
   recentIcon: { fontSize: 20, color: colors.accentFrom, width: 26, textAlign: 'center' },
   recentTitle: { ...typography.body, color: colors.text },
   recentSub: { ...typography.small, color: colors.textFaint, marginTop: 2 },
+
+  bell: {
+    width: 44, height: 44, borderRadius: 22,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.glass, borderWidth: 1, borderColor: colors.glassBorder,
+  },
+  bellIcon: { fontSize: 18 },
+  badge: {
+    position: 'absolute', top: 2, right: 2, minWidth: 18, height: 18,
+    borderRadius: 9, backgroundColor: colors.danger,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4,
+  },
+  badgeText: { ...typography.caption, color: '#fff', fontSize: 10 },
 });

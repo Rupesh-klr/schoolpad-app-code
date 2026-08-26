@@ -20,6 +20,7 @@ const NAV = [
   { href: '/(admin)/students',  label: 'Students',  icon: '👤' },
   { href: '/(admin)/codes',     label: 'Codes',     icon: '#'  },
   { href: '/(admin)/content',   label: 'Content',   icon: '▶'  },
+  { href: '/(admin)/documents', label: 'Notices',   icon: '📢' },
   { href: '/(admin)/settings',  label: 'Settings',  icon: '⚙'  },
 ];
 
