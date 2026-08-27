@@ -71,8 +71,10 @@ Builds, downloads, and drops the file in a dated folder, then opens it in
 Explorer so you can drag it straight into a chat:
 
 ```
-release6-08-27_v1.0.0  app-release.apk      <- send this to testers
-  README.txt           <- version, API base, size, install steps
+release/
+  2026-08-27_v1.0.0/
+    app-release.apk    <- send this to testers
+    README.txt         <- version, API base, size, install steps
 ```
 
 Options:
