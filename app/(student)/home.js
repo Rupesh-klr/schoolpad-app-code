@@ -64,6 +64,15 @@ export default function Home() {
           </Text>
         </View>
         <Pressable
+          onPress={() => router.push('/(student)/myclass')}
+          accessibilityRole="button"
+          accessibilityLabel="My class — timetable, dress code and calendar"
+          style={styles.bell}
+        >
+          <Text style={styles.bellIcon}>🏫</Text>
+        </Pressable>
+
+        <Pressable
           onPress={() => router.push('/(student)/notices')}
           accessibilityRole="button"
           accessibilityLabel={unread ? `Notices, ${unread} unread` : 'Notices'}

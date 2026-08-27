@@ -222,6 +222,34 @@ export const api = {
     audiencePreview: (params) => get(`/api/documents/audience-preview${qs(params)}`),
   },
 
+  classes: {
+    /** The signed-in member's class (or each child's, for a parent). */
+    mine: () => get('/api/classes/mine'),
+    list: (params) => get(`/api/classes${qs(params)}`),
+    detail: (id) => get(`/api/classes/${id}`),
+    create: (payload) => post('/api/classes', payload),
+    update: (id, payload) => put(`/api/classes/${id}`, payload),
+    remove: (id) => del(`/api/classes/${id}`),
+    timetable: (id) => get(`/api/classes/${id}/timetable`),
+    /** Replaces the whole week atomically — see the route for why. */
+    saveTimetable: (id, slots) => put(`/api/classes/${id}/timetable`, { slots }),
+  },
+
+  teachers: {
+    list: (params) => get(`/api/teachers${qs(params)}`),
+    create: (payload) => post('/api/teachers', payload),
+    update: (id, payload) => put(`/api/teachers/${id}`, payload),
+    remove: (id) => del(`/api/teachers/${id}`),
+  },
+
+  calendar: {
+    range: (params) => get(`/api/calendar${qs(params)}`),
+    upcoming: (limit = 5) => get(`/api/calendar/upcoming?limit=${limit}`),
+    create: (payload) => post('/api/calendar', payload),
+    update: (id, payload) => put(`/api/calendar/${id}`, payload),
+    remove: (id) => del(`/api/calendar/${id}`),
+  },
+
   admin: {
     dashboard: () => get('/api/admin/dashboard'),
     users: () => get('/api/admin/users'),
