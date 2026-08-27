@@ -117,26 +117,37 @@ app/                      # expo-router — the file tree is the URL structure
 │   └── gate.js           # redeem a code, or wait — polls every 20s
 ├── (student)/
 │   ├── home.js           # subjects + continue learning
-│   ├── node/[id].js      # ▲ not built
-│   └── item/[id].js      # ▲ not built
+│   ├── myclass.js        # class details, timetable, calendar
+│   ├── notices.js        # notices feed with unread state
+│   ├── node/[id].js      # browsing chapters and topics
+│   └── item/[id].js      # video / PDF / image / link players
 ├── (parent)/
-│   └── children.js       # ▲ not built
+│   └── children.js       # link by access code, progress per child
 └── (admin)/
     ├── _layout.js        # side rail ≥900px, bottom bar below
     ├── dashboard.js      # section 2.1 tiles
     ├── students.js       # section 2.3 — search, filter, approve
     ├── codes.js          # section 2.4 — generate + share
-    ├── schools.js        # ▲ not built
-    ├── content.js        # ▲ not built
-    └── settings.js       # ▲ not built
+    ├── schools.js        # list and create
+    ├── school/[id].js    # classes / students / codes / teachers / calendar
+    ├── class/[id].js     # class details + weekly timetable editor
+    ├── content.js        # the tree + multi-file upload
+    ├── documents.js      # notices composer
+    └── settings.js       # admins, password, legal, audit
 
 src/
 ├── api/client.js         # the only place that holds a token or builds a URL
 ├── auth/AuthContext.js   # session state
 ├── theme/tokens.js
+├── school/               # the school-detail tabs, kept out of the route file
+│   ├── CodesTab.js
+│   └── StudentsTab.js
 └── components/
-    ├── Glass.js
-    └── Field.js
+    ├── Glass.js          # Screen, cards, buttons, shimmer, tiles, pills
+    ├── Field.js          # text inputs and the segmented CodeInput
+    ├── Dropdown.js       # modal select + the shared Chevron
+    ├── Sheet.js          # bottom sheet on phones, dialog on desktop
+    └── FilePicker.js     # DOM file input on web, single or multiple
 ```
 
 ---
@@ -175,21 +186,22 @@ to copying if the target app is missing.
 
 ---
 
-## Not built yet
+## Every screen is built
 
-Honest list. The API endpoints behind all of these are implemented and tested —
-these are UI work only, and each stub screen names the endpoints it needs.
-
-- **Admin: Schools, Content, Settings** — routed, reachable, render a "not built"
-  panel.
-- **Student: node and item screens** — browsing below a subject, and the
-  video/PDF/image/link players with "mark as completed".
-- **Parent: children screen** — linking by the child's access code.
-- **Device previewer** — the iOS/Android look-switcher that `acastahealth-ui` has
-  in `src/dev/DevDevicePreview`. Not ported. Chrome DevTools device emulation
-  covers layout in the meantime; it does not cover native module behaviour.
-- **Offline support.** Every screen needs the network.
-- **i18n.** English only.
+| Route | What it does |
+|---|---|
+| `/login` `/otp` `/register` `/gate` | OTP sign-in, registration, then code-or-approval |
+| `/dashboard` | Section 2.1 tiles + latest registrations |
+| `/schools` `/school/[id]` | Schools, then Classes / Students / Codes / Teachers / Calendar |
+| `/class/[id]` | Class details and the weekly timetable editor |
+| `/students` | Search, cascading class filter, class-wise collapsible groups |
+| `/codes` | Generate in bulk, share via WhatsApp / email / copy / CSV |
+| `/content` | Class → Subject → Chapter → Topic, multi-file upload |
+| `/documents` | Notices — file or link, scoped to everyone / school / class |
+| `/settings` | Admin users, your password, legal documents, audit trail |
+| `/home` `/node/[id]` `/item/[id]` | Student learning: subjects, browsing, players |
+| `/myclass` `/notices` | Class details, timetable, calendar, notices |
+| `/children` | Parent: link by access code, see progress |
 
 ## Known constraints
 
