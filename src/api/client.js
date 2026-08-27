@@ -192,6 +192,8 @@ export const api = {
   content: {
     mine: () => get('/api/content/my'),
     children: (nodeId) => get(`/api/content/nodes/${nodeId}/children`),
+    /** One item plus its breadcrumb — what the player screen needs. */
+    item: (itemId) => get(`/api/content/items/${itemId}`),
     progress: (itemId, status, positionSecs = 0) =>
       post(`/api/content/items/${itemId}/progress`, { status, positionSecs }),
     tree: () => get('/api/content/tree'),
@@ -199,6 +201,8 @@ export const api = {
     updateNode: (id, payload) => put(`/api/content/nodes/${id}`, payload),
     deleteNode: (id) => del(`/api/content/nodes/${id}`),
     createItem: (formData) => request('POST', '/api/content/items', formData, { isForm: true }),
+    /** Up to 10 files in one request. Returns 207 when some were rejected. */
+    uploadBulk: (formData) => request('POST', '/api/content/items/bulk', formData, { isForm: true }),
     updateItem: (id, formData) => request('PUT', `/api/content/items/${id}`, formData, { isForm: true }),
     deleteItem: (id) => del(`/api/content/items/${id}`),
   },

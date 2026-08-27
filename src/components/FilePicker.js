@@ -15,7 +15,7 @@ import { colors, radius, spacing, typography } from '../theme/tokens';
  * `expo-document-picker` and wiring it into `pickNative` below is the fix; the
  * admin dashboard is a web app by design, so it has not been needed yet.
  */
-export function FilePicker({ file, onPick, accept, hint }) {
+export function FilePicker({ file, onPick, accept, hint, multiple = false, maxFiles = 10 }) {
   const inputRef = useRef(null);
   const [dragging, setDragging] = useState(false);
 
@@ -29,17 +29,82 @@ export function FilePicker({ file, onPick, accept, hint }) {
     );
   }
 
-  const onChange = (e) => {
-    const picked = e.target.files?.[0] || null;
-    onPick(picked);
+  /**
+   * Trim to the server's ceiling here as well as on the server.
+   *
+   * Not a substitute for the server check — it is the only place the person
+   * finds out *before* waiting for a 200MB upload to be rejected.
+   */
+  const take = (list) => {
+    const files = Array.from(list || []);
+    if (!multiple) return files[0] || null;
+    return files.slice(0, maxFiles);
   };
+
+  const onChange = (e) => onPick(take(e.target.files));
 
   const onDrop = (e) => {
     e.preventDefault();
     setDragging(false);
-    const dropped = e.dataTransfer?.files?.[0];
-    if (dropped) onPick(dropped);
+    const dropped = take(e.dataTransfer?.files);
+    if (multiple ? dropped.length : dropped) onPick(dropped);
   };
+
+  if (multiple) {
+    const files = Array.isArray(file) ? file : [];
+    const totalMb = files.reduce((n, f) => n + f.size, 0);
+
+    return (
+      <View style={{ marginBottom: spacing.md }}>
+        {React.createElement('input', {
+          ref: inputRef, type: 'file', accept, multiple: true, onChange,
+          style: { display: 'none' },
+        })}
+
+        <Pressable
+          onPress={() => inputRef.current?.click()}
+          accessibilityRole="button"
+          accessibilityLabel="Choose files"
+          onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          style={({ pressed }) => [
+            styles.drop, dragging && styles.dropActive,
+            files.length > 0 && styles.dropFilled, pressed && { opacity: 0.8 },
+          ]}
+        >
+          <Text style={styles.dropIcon}>⤒</Text>
+          <Text style={styles.dropText}>
+            {dragging ? 'Drop them here'
+              : files.length ? `${files.length} file${files.length === 1 ? '' : 's'} · ${formatBytes(totalMb)}`
+              : `Choose up to ${maxFiles} files, or drag them in`}
+          </Text>
+          {hint ? <Text style={styles.dropHint}>{hint}</Text> : null}
+        </Pressable>
+
+        {files.map((f, i) => (
+          <View key={`${f.name}-${i}`} style={styles.fileRow}>
+            <Text style={styles.fileRowName} numberOfLines={1}>{f.name}</Text>
+            <Text style={styles.fileRowSize}>{formatBytes(f.size)}</Text>
+            <Pressable
+              onPress={() => onPick(files.filter((_, j) => j !== i))}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${f.name}`}
+              style={styles.fileRowX}
+            >
+              <Text style={styles.fileRowXText}>✕</Text>
+            </Pressable>
+          </View>
+        ))}
+
+        {files.length > 0 && (
+          <Pressable onPress={() => onPick([])} style={styles.clear} accessibilityRole="button">
+            <Text style={styles.clearText}>Clear all</Text>
+          </Pressable>
+        )}
+      </View>
+    );
+  }
 
   return (
     <View style={{ marginBottom: spacing.md }}>
@@ -121,6 +186,16 @@ const styles = StyleSheet.create({
   fileMeta: { ...typography.small, color: colors.textFaint },
   clear: { alignSelf: 'center', paddingVertical: spacing.xs },
   clearText: { ...typography.small, color: colors.danger },
+
+  fileRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    paddingVertical: spacing.xs, paddingHorizontal: spacing.sm, marginTop: 4,
+    borderRadius: radius.sm, backgroundColor: colors.glass,
+  },
+  fileRowName: { ...typography.small, color: colors.text, flex: 1 },
+  fileRowSize: { ...typography.caption, color: colors.textFaint },
+  fileRowX: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
+  fileRowXText: { color: colors.textMuted, fontSize: 12 },
 
   unsupported: {
     borderRadius: radius.md, borderWidth: 1, borderColor: colors.glassBorder,
