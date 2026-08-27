@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View,
+} from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { api } from '../../../src/api/client';
@@ -8,7 +10,10 @@ import {
   GlassButton, GhostButton, GlassCard, Pill, Empty, SkeletonRows, ErrorNote, StatTile,
 } from '../../../src/components/Glass';
 import { Dropdown, Chevron } from '../../../src/components/Dropdown';
+import { Sheet, SheetRow } from '../../../src/components/Sheet';
 import { Field } from '../../../src/components/Field';
+import { CodesTab } from '../../../src/school/CodesTab';
+import { StudentsTab } from '../../../src/school/StudentsTab';
 import { colors, radius, spacing, typography } from '../../../src/theme/tokens';
 
 /**
@@ -27,13 +32,26 @@ const EVENT_TYPES = [
   { value: 'deadline', label: '⏰ Deadline' },
 ];
 
+const SECTIONS = [
+  { key: 'classes',  label: 'Classes',  icon: '🏫' },
+  { key: 'students', label: 'Students', icon: '👤' },
+  { key: 'codes',    label: 'Codes',    icon: '#'  },
+  { key: 'teachers', label: 'Teachers', icon: '👩‍🏫' },
+  { key: 'calendar', label: 'Calendar', icon: '📅' },
+];
+
 export default function SchoolDetail() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { constants } = useAuth();
+  const { width } = useWindowDimensions();
+
+  // 820, not 700: five tabs with real words in them start truncating below it.
+  const wide = width >= 820;
 
   const [tab, setTab] = useState('classes');
+  const [navOpen, setNavOpen] = useState(false);
   const [school, setSchool] = useState(null);
   const [classes, setClasses] = useState(null);
   const [teachers, setTeachers] = useState(null);
@@ -73,6 +91,16 @@ export default function SchoolDetail() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (tab === 'calendar') loadEvents(); }, [tab, loadEvents]);
 
+  const current = SECTIONS.find((s) => s.key === tab) || SECTIONS[0];
+
+  // Students and codes are loaded by their own tabs, so no count is shown for
+  // them here — a stale number is worse than none.
+  const counts = {
+    classes: classes?.length,
+    teachers: teachers?.length,
+    calendar: events?.length,
+  };
+
   return (
     <ScrollView
       contentContainerStyle={[styles.scroll, { paddingTop: insets.top + spacing.lg, paddingBottom: spacing.xxl }]}
@@ -92,11 +120,38 @@ export default function SchoolDetail() {
         <StatTile label="Students" value={school?.studentCount ?? '—'} loading={!school} />
       </View>
 
-      <View style={styles.tabs}>
-        <Tab label="Classes" active={tab === 'classes'} onPress={() => setTab('classes')} />
-        <Tab label="Teachers" active={tab === 'teachers'} onPress={() => setTab('teachers')} />
-        <Tab label="Calendar" active={tab === 'calendar'} onPress={() => setTab('calendar')} />
-      </View>
+      {/* Five sections do not fit a phone as a tab row. Wide screens get the
+          row; narrow ones get a single button opening a sheet, which stays
+          one thumb-reachable tap however many sections there are. */}
+      {wide ? (
+        <View style={styles.tabs}>
+          {SECTIONS.map((s) => (
+            <Tab key={s.key} label={s.label} active={tab === s.key} onPress={() => setTab(s.key)} />
+          ))}
+        </View>
+      ) : (
+        <Pressable onPress={() => setNavOpen(true)} style={styles.navButton}
+                   accessibilityRole="button" accessibilityState={{ expanded: navOpen }}
+                   accessibilityLabel={`Section: ${current.label}`}>
+          <Text style={styles.navIcon}>{current.icon}</Text>
+          <Text style={styles.navLabel}>{current.label}</Text>
+          <Text style={styles.navCount}>{counts[tab] ?? ''}</Text>
+          <Chevron open={navOpen} size={14} color={colors.accentFrom} />
+        </Pressable>
+      )}
+
+      <Sheet open={navOpen} onClose={() => setNavOpen(false)} title={school?.name} subtitle="Jump to a section">
+        {SECTIONS.map((s) => (
+          <SheetRow
+            key={s.key}
+            icon={s.icon}
+            label={s.label}
+            hint={counts[s.key] !== undefined ? `${counts[s.key]}` : undefined}
+            tone={tab === s.key ? 'success' : 'default'}
+            onPress={() => { setTab(s.key); setNavOpen(false); }}
+          />
+        ))}
+      </Sheet>
 
       <ErrorNote message={error} />
 
@@ -104,6 +159,15 @@ export default function SchoolDetail() {
         <ClassesTab
           schoolId={id} classes={classes} teachers={teachers} constants={constants}
           onChanged={load} onOpen={(c) => router.push(`/(admin)/class/${c.id}`)} setError={setError}
+        />
+      )}
+      {tab === 'students' && (
+        <StudentsTab schoolId={id} schoolName={school?.name || 'this school'} setError={setError} />
+      )}
+      {tab === 'codes' && (
+        <CodesTab
+          schoolId={id} schoolName={school?.name || 'this school'}
+          classes={classes} constants={constants} setError={setError}
         />
       )}
       {tab === 'teachers' && (
@@ -495,6 +559,16 @@ const styles = StyleSheet.create({
   tab: { flex: 1, paddingVertical: spacing.sm, borderRadius: radius.pill, alignItems: 'center' },
   tabActive: { backgroundColor: colors.glassStrong },
   tabText: { ...typography.small, color: colors.textMuted },
+
+  navButton: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    minHeight: 52, paddingHorizontal: spacing.md, marginBottom: spacing.lg,
+    borderRadius: radius.md, borderWidth: 1, borderColor: colors.accentFrom,
+    backgroundColor: colors.accentSoft,
+  },
+  navIcon: { fontSize: 17 },
+  navLabel: { ...typography.h3, color: colors.text, flex: 1 },
+  navCount: { ...typography.small, color: colors.textFaint },
 
   composerHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.md },
   composerTitle: { ...typography.h3, color: colors.text },
