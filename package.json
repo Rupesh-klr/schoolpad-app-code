@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "main": "expo-router/entry",
-  "description": "Student learning app — Android, iOS and web from one codebase",
+  "description": "Student learning app \u2014 Android, iOS and web from one codebase",
   "scripts": {
     "setup": "expo install expo-router expo-linear-gradient expo-blur expo-secure-store expo-clipboard expo-sharing expo-video react-native-safe-area-context react-native-screens react-native-webview react-native-reanimated react-native-gesture-handler react-dom react-native-web @expo/metro-runtime",
     "start": "expo start",
@@ -18,7 +18,9 @@
     "build:ios": "eas build --platform ios --profile production",
     "build:all": "node scripts/release.js",
     "submit:android": "eas submit --platform android --latest",
-    "submit:ios": "eas submit --platform ios --latest"
+    "submit:ios": "eas submit --platform ios --latest",
+    "apk": "powershell -ExecutionPolicy Bypass -File scripts/build-apk.ps1",
+    "apk:local": "powershell -ExecutionPolicy Bypass -File scripts/build-apk.ps1 -Mode local"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.13",
@@ -43,7 +45,7 @@
   },
   "//": [
     "Only the four packages Expo pinned itself are listed. Everything else is",
-    "installed by `npm run setup`, which calls `expo install` — that resolves each",
+    "installed by `npm run setup`, which calls `expo install` \u2014 that resolves each",
     "package to the version this SDK was tested against instead of whatever npm",
     "considers newest. Hand-writing those versions is how an SDK upgrade turns",
     "into a day of native build errors."

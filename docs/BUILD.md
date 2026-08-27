@@ -61,12 +61,42 @@ sheet, video), so test those on a real device before release.
 
 ### An APK to sideload or hand to a tester
 
+**One command on Windows:**
+
+```powershell
+npm run apk
+```
+
+Builds, downloads, and drops the file in a dated folder, then opens it in
+Explorer so you can drag it straight into a chat:
+
+```
+release6-08-27_v1.0.0  app-release.apk      <- send this to testers
+  README.txt           <- version, API base, size, install steps
+```
+
+Options:
+
+```powershell
+npm run apk -- -ApiBase https://api.myagemap.com   # bake in a reachable server
+npm run apk -- -Bump patch                         # 1.0.0 -> 1.0.1, versionCode +1
+npm run apk:local                                  # build with Gradle instead of the cloud
+```
+
+**Always pass `-ApiBase` for a shared build.** A tester's phone resolves
+`localhost` to itself, not to your laptop, so an APK built without it connects
+to nothing and looks broken with no error worth reading.
+
+`-Mode eas` (the default) builds on Expo's servers — no Android Studio, no JDK,
+no Gradle, and it signs the APK for you. `-Mode local` needs `ANDROID_HOME` and
+a JDK 17, and will refuse to hand you an unsigned APK rather than let you find
+out at install time.
+
+Underneath it is the same thing as:
+
 ```bash
 npm run build:android:apk       # eas build --platform android --profile preview
 ```
-
-Builds in Expo's cloud and gives you a download URL. **This runs from Windows** —
-no Android Studio, no local Gradle.
 
 An APK installs directly on a device. It is the format for testing.
 
