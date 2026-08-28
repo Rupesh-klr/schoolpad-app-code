@@ -133,9 +133,56 @@ if ($Mode -eq 'local') {
   Say "sdk:     $sdk"
 
   if (-not $NoPrebuild) {
+
+    # `prebuild --clean` deletes android\ and recreates it, so anything holding
+    # a file in there fails the whole build with EBUSY. On this machine the
+    # usual culprits are a leftover Gradle daemon and VS Code's Gradle
+    # extension, which opens the project as soon as it sees a build.gradle.
+    if (Test-Path (Join-Path $Root 'android\gradlew.bat')) {
+      Step "Stopping Gradle daemons"
+      Push-Location (Join-Path $Root 'android')
+      try { .\gradlew.bat --stop 2>&1 | Select-Object -Last 2 } catch { Warn "gradlew --stop failed; carrying on" }
+      Pop-Location
+    }
+
     Step "Generating the native project (expo prebuild)"
-    npx expo prebuild --platform android --clean
-    if ($LASTEXITCODE -ne 0) { Die "expo prebuild failed." }
+
+    $prebuilt = $false
+    for ($attempt = 1; $attempt -le 3 -and -not $prebuilt; $attempt++) {
+      npx expo prebuild --platform android --clean
+      if ($LASTEXITCODE -eq 0) { $prebuilt = $true; break }
+
+      if ($attempt -lt 3) {
+        # A file handle released a moment ago can still block a rmdir; a short
+        # wait clears the common case without a retry loop that hides a real
+        # problem.
+        Warn "prebuild failed (likely a locked file). Retrying in 5s... ($attempt/3)"
+        Start-Sleep -Seconds 5
+      }
+    }
+
+    if (-not $prebuilt) {
+      # Falling back rather than stopping: prebuild without --clean writes into
+      # the existing folder instead of deleting it, which succeeds while a file
+      # is held open. It can leave stale native config behind, so say so.
+      Warn "Could not replace android\ - something is holding a file in it."
+      Warn "Trying without --clean (keeps the existing native project)."
+      npx expo prebuild --platform android
+      if ($LASTEXITCODE -ne 0) {
+        Die @"
+expo prebuild failed even without --clean.
+
+Something has android\ open. The usual causes, in order:
+  1. VS Code's Gradle or Java extension - close VS Code and run this again.
+  2. Android Studio has the project open - close it.
+  3. A file explorer window sitting inside android\.
+
+Then re-run. Or use:  npm run apk -- -NoPrebuild
+"@
+      }
+      Warn "Built from the existing native project - a recent app.json change may not be included."
+    }
+
   } elseif (-not (Test-Path (Join-Path $Root 'android'))) {
     Die "-NoPrebuild was given but there is no android\ folder yet."
   }
