@@ -162,25 +162,37 @@ if ($Mode -eq 'local') {
     }
 
     if (-not $prebuilt) {
-      # Falling back rather than stopping: prebuild without --clean writes into
-      # the existing folder instead of deleting it, which succeeds while a file
-      # is held open. It can leave stale native config behind, so say so.
-      Warn "Could not replace android\ - something is holding a file in it."
-      Warn "Trying without --clean (keeps the existing native project)."
-      npx expo prebuild --platform android
-      if ($LASTEXITCODE -ne 0) {
-        Die @"
-expo prebuild failed even without --clean.
+      # `expo prebuild` clears android\ whether or not --clean is passed, so
+      # there is no "write in place" fallback to try. The only way through is to
+      # name what is holding the folder.
+      #
+      # EBUSY on `rmdir android` - the directory itself, not a file inside it -
+      # almost always means a process has it as its working directory, rather
+      # than merely holding a file open.
+      $blockers = @()
+      Get-CimInstance Win32_Process |
+        Where-Object { $_.CommandLine -and $_.CommandLine -match 'expo start|gradle|studio64|adb' } |
+        ForEach-Object {
+          $blockers += ("    PID {0}  {1}" -f $_.ProcessId, $_.CommandLine.Substring(0, [Math]::Min(80, $_.CommandLine.Length)))
+        }
 
-Something has android\ open. The usual causes, in order:
-  1. VS Code's Gradle or Java extension - close VS Code and run this again.
-  2. Android Studio has the project open - close it.
-  3. A file explorer window sitting inside android\.
+      $found = if ($blockers.Count) { "`n`nProcesses that could be holding it:`n" + ($blockers -join "`n") } else { "" }
 
-Then re-run. Or use:  npm run apk -- -NoPrebuild
+      Die @"
+Could not regenerate android\ - something has the folder open.
+
+Note that ``expo prebuild`` clears android\ with or without --clean, so there is
+no fallback that writes in place.
+
+Close whichever of these is running, then re-run:
+  1. A dev server - ``npm run android`` or ``expo start`` holds the project.
+  2. VS Code's Gradle or Java extension.
+  3. Android Studio with the project open.
+  4. A terminal or Explorer window sitting inside android\.$found
+
+Or skip regeneration entirely, which is safe when app.json has not changed:
+  npm run apk -- -NoPrebuild
 "@
-      }
-      Warn "Built from the existing native project - a recent app.json change may not be included."
     }
 
   } elseif (-not (Test-Path (Join-Path $Root 'android'))) {
