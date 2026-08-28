@@ -167,7 +167,33 @@ if ($ApiBase -eq '') {
   Say "api:     $ApiBase"
 }
 
-if ($ApiBase -ne '') { $env:EXPO_PUBLIC_API_BASE = $ApiBase }
+<#
+  Write the address into .env, not just the environment.
+
+  Gradle decides whether to re-bundle the JavaScript by comparing file inputs.
+  An environment variable is not one, so exporting EXPO_PUBLIC_API_BASE and
+  rebuilding produces an APK containing the PREVIOUS address while every log
+  line and the README report the new one - an APK that cannot reach the server,
+  described by a file that says it can.
+
+  .env is a real input, so changing it invalidates the bundle task. Only this
+  one key is rewritten; anything else in the file is preserved.
+#>
+if ($ApiBase -ne '') {
+  $env:EXPO_PUBLIC_API_BASE = $ApiBase
+
+  $envFile = Join-Path $Root '.env'
+  $lines = if (Test-Path $envFile) {
+    @(Get-Content $envFile | Where-Object { $_ -notmatch '^\s*EXPO_PUBLIC_API_BASE\s*=' })
+  } else { @() }
+  $lines += "EXPO_PUBLIC_API_BASE=$ApiBase"
+  Set-Content -Path $envFile -Value $lines -Encoding ascii
+
+  # Belt and braces: even with .env changed, a stale generated bundle can be
+  # picked up by the asset merge. Removing it forces a real re-bundle.
+  $generated = Join-Path $Root 'android\app\build\generated\assets\react'
+  if (Test-Path $generated) { Remove-Item $generated -Recurse -Force -ErrorAction SilentlyContinue }
+}
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
@@ -335,6 +361,42 @@ Close whichever of these is running, then re-run:
 # ── Report ────────────────────────────────────────────────────────────────────
 
 if (-not (Test-Path $OutFile)) { Die "The build finished but no APK arrived at $OutFile" }
+
+<#
+  Confirm the APK really contains the address it is about to be labelled with.
+
+  This exists because it already went wrong: a cached JS bundle produced an APK
+  holding the previous address while the README stated the new one. A build that
+  quietly ships the wrong server is worse than one that fails, because nothing
+  looks broken until a tester says the app does nothing.
+#>
+if ($ApiBase -ne '') {
+  try {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($OutFile)
+    try {
+      $entry = $zip.Entries | Where-Object { $_.FullName -eq 'assets/index.android.bundle' }
+      if ($entry) {
+        $reader = New-Object System.IO.StreamReader($entry.Open())
+        $bundle = $reader.ReadToEnd()
+        $reader.Dispose()
+
+        if ($bundle.Contains($ApiBase)) {
+          Say "verified: the APK points at $ApiBase"
+        } else {
+          $found = [regex]::Matches($bundle, 'https?://[0-9A-Za-z\.\-]+:\d+') |
+                   ForEach-Object { $_.Value } | Sort-Object -Unique | Select-Object -First 3
+          Warn "The APK does NOT contain $ApiBase"
+          if ($found) { Warn "It points at: $($found -join ', ')" }
+          Warn "The JS bundle was reused from an earlier build. Delete android\app\build"
+          Warn "and run again, or use: npm run apk -- -Bump patch"
+        }
+      }
+    } finally { $zip.Dispose() }
+  } catch {
+    Warn "Could not inspect the APK to confirm its API address: $($_.Exception.Message)"
+  }
+}
 
 $sizeMb = [math]::Round((Get-Item $OutFile).Length / 1MB, 1)
 $sha    = (Get-FileHash $OutFile -Algorithm SHA256).Hash.Substring(0, 16)
