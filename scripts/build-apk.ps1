@@ -163,19 +163,53 @@ function Get-LanAddress {
   } catch { return $null }
 }
 
-if ($ApiBase -eq '') {
-  $lan = Get-LanAddress
-  if ($lan) {
-    $ApiBase = "http://${lan}:$ApiPort"
-    Say "api:     $ApiBase  (detected)"
-    Say "         testers must be on the same Wi-Fi, and the API must be running"
-  } else {
-    Warn "Could not detect a LAN address. The APK will use whatever .env sets."
-    Warn "If that is localhost, testers' phones will reach nothing."
-    Warn "Pass one explicitly:  -ApiBase http://192.168.1.6:$ApiPort"
-  }
+<#
+  Precedence: the flag, then a deployed address already in .env, then detection.
+
+  Detecting a LAN address is right when .env holds nothing useful, and wrong
+  when someone has deliberately pointed the app at a real server - overwriting
+  that with 192.168.x.y would quietly undo the change and produce an APK that
+  only works on one Wi-Fi network.
+
+  "Deployed" means anything that is not loopback or a private range. A LAN
+  address in .env is treated as detectable, since it goes stale whenever the
+  laptop moves to a different network.
+#>
+function Test-IsDeployedAddress($value) {
+  if ([string]::IsNullOrWhiteSpace($value)) { return $false }
+  $host_ = ($value -replace '^https?://', '') -replace '[:/].*$', ''
+  if ($host_ -match '^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)') { return $false }
+  return $true
+}
+
+if ($ApiBase -ne '') {
+  Say "api:     $ApiBase  (from -ApiBase)"
 } else {
-  Say "api:     $ApiBase"
+  $envFile = Join-Path $Root '.env'
+  $fromEnv = ''
+  if (Test-Path $envFile) {
+    $m = Select-String -Path $envFile -Pattern '^\s*EXPO_PUBLIC_API_BASE\s*=\s*(.+?)\s*$' |
+         Select-Object -First 1
+    if ($m) { $fromEnv = $m.Matches[0].Groups[1].Value }
+  }
+
+  if (Test-IsDeployedAddress $fromEnv) {
+    $ApiBase = $fromEnv
+    Say "api:     $ApiBase  (from .env)"
+    Say "         a deployed address, so LAN detection is skipped"
+  } else {
+    $lan = Get-LanAddress
+    if ($lan) {
+      $ApiBase = "http://${lan}:$ApiPort"
+      Say "api:     $ApiBase  (detected)"
+      Say "         testers must be on the same Wi-Fi, and the API must be running"
+      if ($fromEnv) { Say "         replacing the local address in .env ($fromEnv)" }
+    } else {
+      Warn "Could not detect a LAN address. The APK will use whatever .env sets."
+      Warn "If that is localhost, testers' phones will reach nothing."
+      Warn "Pass one explicitly:  -ApiBase http://192.168.1.6:$ApiPort"
+    }
+  }
 }
 
 <#
