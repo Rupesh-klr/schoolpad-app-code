@@ -1,0 +1,76 @@
+# Apache rules for the exported Expo web build.
+#
+# Lives in public/, which Expo copies to the root of the export, so it ships
+# with every build rather than being something to remember on the server.
+#
+# The problem it solves: `expo export` with output: "static" pre-renders each
+# route to its own file — /login is login.html on disk. Apache asked for a file
+# literally named "login" finds nothing and returns 404, which is what a fresh
+# deployment does on every route except "/".
+
+# MultiViews does its own extension guessing and picks differently from the
+# rules below, so a request can resolve two ways depending on what else exists.
+# Turned off so the rewrites are the only thing deciding.
+Options -MultiViews
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # 1. A real file wins. Assets, images, fonts, the bundle.
+  RewriteCond %{REQUEST_FILENAME} -f
+  RewriteRule ^ - [L]
+
+  # 2. /login -> login.html. This is the rule that fixes the 404.
+  RewriteCond %{REQUEST_FILENAME}.html -f
+  RewriteRule ^(.+?)/?$ $1.html [L]
+
+  # 3. /some/dir -> some/dir/index.html
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteCond %{REQUEST_FILENAME}/index.html -f
+  RewriteRule ^(.*?)/?$ $1/index.html [L]
+
+  # 4. Dynamic routes: /class/5 has no file of its own — it is served by
+  #    class/[id].html. Rather than encode bracket names in Apache (they are
+  #    awkward to match and easy to get wrong), fall through to index.html.
+  #    Every pre-rendered page is the same shell and the router reads the real
+  #    path from the URL on the client, so this loads the right screen.
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# ── Caching ───────────────────────────────────────────────────────────────────
+#
+# Hashed filenames can be cached forever. HTML never can: every route ships the
+# same shell carrying the current bundle hashes, so a stale copy points at files
+# the next deploy deleted and the app fails to boot entirely.
+<IfModule mod_headers.c>
+  <FilesMatch "\.html$">
+    Header set Cache-Control "no-cache, no-store, must-revalidate"
+  </FilesMatch>
+
+  <FilesMatch "\.(js|css|woff2?|ttf|otf|png|jpe?g|gif|svg|webp|ico|mp4)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+  </FilesMatch>
+
+  # Stops a browser guessing a content type and running something as script.
+  Header set X-Content-Type-Options "nosniff"
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/css text/plain
+  AddOutputFilterByType DEFLATE application/javascript text/javascript
+  AddOutputFilterByType DEFLATE application/json image/svg+xml
+</IfModule>
+
+<IfModule mod_mime.c>
+  AddType text/javascript .js .mjs
+  AddType application/json .json
+  AddType image/svg+xml .svg
+  AddType font/woff2 .woff2
+</IfModule>
+
+# The exported app is a single page; Apache's own error page would replace it
+# with something branded by the host instead of the app's own not-found screen.
+ErrorDocument 404 /index.html
