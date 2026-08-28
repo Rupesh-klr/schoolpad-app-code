@@ -109,6 +109,41 @@ Two things a detected LAN address requires: the tester's phone on the same
 Wi-Fi, and your API actually running. It is not reachable from outside the
 network - for that, deploy the API and pass its public URL.
 
+#### Memory use
+
+The build is capped to roughly 2GB so the machine stays usable while it runs:
+
+| Setting | Value | Caps |
+|---|---|---|
+| `org.gradle.jvmargs` | `-Xmx1536m` | the Gradle daemon |
+| `org.gradle.parallel` | `false` | tasks run one at a time |
+| `org.gradle.workers.max` | `2` | Gradle's worker pool |
+| `kotlin.compiler.execution.strategy` | `in-process` | no separate Kotlin JVM |
+| `CMAKE_BUILD_PARALLEL_LEVEL` | `2` | ninja compiling C++ |
+
+The generated project sets `parallel=true` with no worker cap, so Gradle sizes
+its pool from the CPU count. On a sixteen-core laptop that is sixteen worker
+JVMs, plus a Kotlin daemon with its own heap, plus ninja on every core — enough
+to exhaust 16GB and leave the machine swapping rather than merely busy.
+
+`--max-workers` alone is not enough: the native build shells out to ninja, which
+defaults to one job per core no matter what Gradle thinks. `CMAKE_BUILD_PARALLEL_LEVEL`
+is the lever that reaches inside `externalNativeBuild`.
+
+`--no-daemon` matters too. A daemon left resident holds its heap for hours after
+the build, which is the memory people notice long after they stopped building.
+
+Raise any of it on a machine with room:
+
+```powershell
+npm run apk -- -MaxWorkers 6                  # more parallelism
+$env:GRADLE_HEAP='3072m'; npm run apk         # more heap
+$env:GRADLE_WORKERS='4'; npm run apk
+```
+
+Expect the build to take longer than an uncapped one. That trade is deliberate:
+a build that finishes slowly beats one that makes the laptop stop responding.
+
 #### Which mode it picks
 
 `npm run apk` defaults to `-Mode auto`:

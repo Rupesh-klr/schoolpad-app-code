@@ -171,12 +171,6 @@ function tuneGradle() {
   const file = path.join(ANDROID, 'gradle.properties');
   let text = fs.readFileSync(file, 'utf8');
 
-  const heap = process.env.GRADLE_HEAP || '4096m';
-  text = text.replace(
-    /^org\.gradle\.jvmargs=.*$/m,
-    `org.gradle.jvmargs=-Xmx${heap} -XX:MaxMetaspaceSize=1024m`,
-  );
-
   if (process.env.ALL_ABIS === '1') {
     say('architectures: all four (ALL_ABIS=1)');
   } else {
@@ -187,8 +181,54 @@ function tuneGradle() {
     say('architectures: armeabi-v7a, arm64-v8a (ARM only - set ALL_ABIS=1 for emulators)');
   }
 
+  /*
+   * Keep the whole build inside roughly 2GB.
+   *
+   * The generated project sets org.gradle.parallel=true and no worker cap, so
+   * Gradle sizes its pool from the CPU count — sixteen on this machine. Add a
+   * separate Kotlin compiler daemon with its own heap, and ninja compiling C++
+   * across every core, and the peak is far more than the Gradle heap alone
+   * suggests. On a 16GB laptop that is enough to push everything into swap and
+   * make the machine unusable rather than merely slow.
+   *
+   * Each setting below caps one specific consumer:
+   */
+  const heap = process.env.GRADLE_HEAP || '1536m';
+  const workers = process.env.GRADLE_WORKERS || '2';
+
+  const settings = {
+    // The Gradle daemon itself.
+    'org.gradle.jvmargs': `-Xmx${heap} -XX:MaxMetaspaceSize=512m -XX:+UseSerialGC`,
+
+    // Off, so tasks run one at a time. Slower in wall-clock terms, but the
+    // difference between a build that finishes and a laptop that stops
+    // responding is not a trade worth making for a few minutes.
+    'org.gradle.parallel': 'false',
+    'org.gradle.workers.max': workers,
+
+    // Kotlin compiles inside the Gradle daemon rather than spawning its own
+    // JVM. One heap to bound instead of two.
+    'kotlin.compiler.execution.strategy': 'in-process',
+    'kotlin.incremental': 'true',
+
+    // Reuse output between builds, so a rebuild does far less work.
+    'org.gradle.caching': 'true',
+
+    // File-system watching keeps a tree of the project in memory. Useful for a
+    // long-lived IDE daemon, wasted on a one-shot release build.
+    'org.gradle.vfs.watch': 'false',
+  };
+
+  for (const [key, value] of Object.entries(settings)) {
+    const line = `${key}=${value}`;
+    const pattern = new RegExp(`^${key.replace(/\./g, '\\.')}=.*$`, 'm');
+    text = pattern.test(text) ? text.replace(pattern, line) : `${text.trimEnd()}\n${line}\n`;
+  }
+
   fs.writeFileSync(file, text);
-  say(`gradle heap: ${heap}`);
+
+  say(`gradle heap: ${heap} (single daemon, Kotlin in-process)`);
+  say(`workers: ${workers}, parallel off - set GRADLE_HEAP / GRADLE_WORKERS to change`);
 }
 
 try {

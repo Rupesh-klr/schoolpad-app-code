@@ -41,6 +41,17 @@ param(
   # Port the API listens on, used only when ApiBase is being detected.
   [int]$ApiPort = 8100,
 
+  <#
+    How much of the machine the build may use.
+
+    Two, not the core count. Gradle's default is one worker per core, which on a
+    sixteen-core laptop means sixteen concurrent JVM workers plus a Kotlin
+    daemon plus ninja on every core — enough to exhaust 16GB and leave the
+    machine swapping rather than merely busy. Raise it on a workstation with
+    memory to spare.
+  #>
+  [int]$MaxWorkers = 2,
+
   [ValidateSet('none', 'patch', 'minor', 'major')]
   [string]$Bump = 'none',
 
@@ -299,11 +310,34 @@ Close whichever of these is running, then re-run:
   if ($LASTEXITCODE -ne 0) { Die "Signing setup failed." }
 
   Step "gradlew assembleRelease"
-  Say "First run downloads Gradle and the Android toolchain - expect 10-20 minutes."
+  Say "Capped to $MaxWorkers worker(s) so the machine stays usable while it runs."
+  Say "First run downloads Gradle and the Android toolchain - expect 15-30 minutes."
+
+  <#
+    Cap the C++ side too.
+
+    --max-workers bounds Gradle's own task pool, but the native build shells out
+    to ninja, which defaults to one job per core regardless. On sixteen cores
+    that is sixteen compilers running inside a single Gradle worker that Gradle
+    counts as one. CMake reads this variable, so it is the lever that reaches
+    inside externalNativeBuild.
+  #>
+  $env:CMAKE_BUILD_PARALLEL_LEVEL = "$MaxWorkers"
+
   Push-Location (Join-Path $Root 'android')
   try {
-    .\gradlew.bat assembleRelease --no-daemon
-    if ($LASTEXITCODE -ne 0) { Die "Gradle build failed. Scroll up for the first error." }
+    # --no-daemon so the JVM exits when the build does. A daemon left resident
+    # keeps its heap for hours, which is the memory people notice long after
+    # they stopped building.
+    .\gradlew.bat assembleRelease --no-daemon --max-workers=$MaxWorkers
+    if ($LASTEXITCODE -ne 0) {
+      Die @"
+Gradle build failed. Scroll up for the first error.
+
+If it ran out of memory, give it more for one run:
+  `$env:GRADLE_HEAP='2560m'; npm run apk
+"@
+    }
   } finally {
     Pop-Location
   }
