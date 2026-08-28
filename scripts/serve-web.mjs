@@ -23,7 +23,28 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Hosts assign the port; the fallback is only for running this by hand.
 const PORT = Number(process.env.PORT || 8081);
 const HOST = process.env.HOST || '0.0.0.0';
-const ROOT = path.resolve(process.env.WEB_DIST || path.join(__dirname, '..', 'dist'));
+
+/**
+ * Where the exported site is.
+ *
+ * `build` first because that is what the npm script emits and what most hosts
+ * default their output directory to; `dist` second because it is Expo's own
+ * default and what an older export or a plain `expo export` leaves behind.
+ * Accepting both means the server does not break when only one of the two is
+ * changed.
+ */
+function findRoot() {
+  if (process.env.WEB_DIST) return path.resolve(process.env.WEB_DIST);
+
+  const root = path.join(__dirname, '..');
+  for (const dir of ['build', 'dist']) {
+    const candidate = path.join(root, dir);
+    if (fs.existsSync(path.join(candidate, 'index.html'))) return path.resolve(candidate);
+  }
+  return path.resolve(path.join(root, 'build'));
+}
+
+const ROOT = findRoot();
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
