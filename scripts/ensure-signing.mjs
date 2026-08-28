@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
  *
  * React Native's generated project signs release builds with the debug key.
  * That APK installs, but every machine's debug key is different, so the next
- * build from another laptop cannot update it — Android refuses an update whose
+ * build from another laptop cannot update it - Android refuses an update whose
  * signature changed. For something you hand to real testers that is a trap, so
  * this creates one stable release key and wires it in.
  *
@@ -51,7 +51,7 @@ function ensureKeystore() {
   // the key it protects, which is already the thing being guarded.
   const password = crypto.randomBytes(24).toString('base64url');
 
-  say('no signing key yet — creating one');
+  say('no signing key yet - creating one');
   execFileSync('keytool', [
     '-genkeypair', '-v',
     '-keystore', KEYSTORE,
@@ -144,7 +144,7 @@ function patchBuildGradle() {
     '$1release',
   );
   if (text === before) {
-    throw new Error('Could not repoint the release buildType — build.gradle layout changed.');
+    throw new Error('Could not repoint the release buildType - build.gradle layout changed.');
   }
 
   fs.writeFileSync(file, text);
@@ -157,7 +157,7 @@ function patchBuildGradle() {
  * The generated project caps the Gradle daemon at 2GB while compiling native
  * code for four architectures in parallel. On a many-core machine that is
  * enough concurrent C++ to exhaust the heap, and the daemon dies with
- * "Gradle build daemon disappeared unexpectedly" — which names no cause at all.
+ * "Gradle build daemon disappeared unexpectedly" - which names no cause at all.
  *
  * x86 and x86_64 exist for emulators. Every real Android phone is ARM, so a
  * build meant for testers drops them: half the native work, a smaller APK, and
@@ -184,7 +184,7 @@ function tuneGradle() {
       /^reactNativeArchitectures=.*$/m,
       'reactNativeArchitectures=armeabi-v7a,arm64-v8a',
     );
-    say('architectures: armeabi-v7a, arm64-v8a (ARM only — set ALL_ABIS=1 for emulators)');
+    say('architectures: armeabi-v7a, arm64-v8a (ARM only - set ALL_ABIS=1 for emulators)');
   }
 
   fs.writeFileSync(file, text);

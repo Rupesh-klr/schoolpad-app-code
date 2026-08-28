@@ -132,71 +132,94 @@ if ($Mode -eq 'local') {
   if (-not $hasJava) { Die "No JDK on PATH. Install one (17 or newer), or use -Mode eas." }
   Say "sdk:     $sdk"
 
-  if (-not $NoPrebuild) {
+  $androidDir  = Join-Path $Root 'android'
+  $hashFile    = Join-Path $androidDir '.prebuild-hash'
+  $hasAndroid  = Test-Path (Join-Path $androidDir 'gradlew.bat')
 
-    # `prebuild --clean` deletes android\ and recreates it, so anything holding
-    # a file in there fails the whole build with EBUSY. On this machine the
-    # usual culprits are a leftover Gradle daemon and VS Code's Gradle
-    # extension, which opens the project as soon as it sees a build.gradle.
-    if (Test-Path (Join-Path $Root 'android\gradlew.bat')) {
+  <#
+    Regenerate android\ only when the config that produces it has changed.
+
+    `expo prebuild` deletes and recreates the folder — android\ is gitignored,
+    and Expo treats a gitignored native directory as disposable, so it clears
+    even without --clean. Anything with the folder open fails the whole build
+    with EBUSY, and on Windows a directory that is some process's working
+    directory cannot be renamed or removed no matter what is closed.
+
+    Since the folder is a pure function of app.json plus the installed native
+    packages, regenerating it when neither has changed is wasted work that only
+    creates a chance to fail. Hashing those inputs makes the common rebuild
+    skip prebuild entirely, which is both faster and immune to the lock.
+  #>
+  $inputs = @('app.json', 'package.json') |
+            ForEach-Object { Get-FileHash (Join-Path $Root $_) -Algorithm SHA256 } |
+            ForEach-Object { $_.Hash }
+  $currentHash = ($inputs -join '-')
+  $storedHash  = if (Test-Path $hashFile) { (Get-Content $hashFile -Raw).Trim() } else { '' }
+
+  $needsPrebuild = -not $hasAndroid -or ($currentHash -ne $storedHash)
+
+  if ($NoPrebuild) {
+    if (-not $hasAndroid) { Die "-NoPrebuild was given but there is no android\ folder yet." }
+    Say "prebuild: skipped (-NoPrebuild)"
+    $needsPrebuild = $false
+  } elseif (-not $needsPrebuild) {
+    Say "prebuild: skipped - app.json and package.json are unchanged"
+  }
+
+  if ($needsPrebuild) {
+
+    # A live daemon is the one holder that can be released cleanly.
+    if ($hasAndroid) {
       Step "Stopping Gradle daemons"
-      Push-Location (Join-Path $Root 'android')
-      try { .\gradlew.bat --stop 2>&1 | Select-Object -Last 2 } catch { Warn "gradlew --stop failed; carrying on" }
+      Push-Location $androidDir
+      try { .\gradlew.bat --stop 2>&1 | Select-Object -Last 1 } catch { Warn "gradlew --stop failed; carrying on" }
       Pop-Location
     }
 
     Step "Generating the native project (expo prebuild)"
+    Say "app.json or package.json changed, so android\ has to be rebuilt."
 
     $prebuilt = $false
     for ($attempt = 1; $attempt -le 3 -and -not $prebuilt; $attempt++) {
       npx expo prebuild --platform android --clean
       if ($LASTEXITCODE -eq 0) { $prebuilt = $true; break }
-
       if ($attempt -lt 3) {
-        # A file handle released a moment ago can still block a rmdir; a short
-        # wait clears the common case without a retry loop that hides a real
-        # problem.
-        Warn "prebuild failed (likely a locked file). Retrying in 5s... ($attempt/3)"
+        # A handle released a moment ago can still block a rmdir; a short wait
+        # clears that without a retry loop that would hide a real problem.
+        Warn "prebuild failed (folder is locked). Retrying in 5s... ($attempt/3)"
         Start-Sleep -Seconds 5
       }
     }
 
-    if (-not $prebuilt) {
-      # `expo prebuild` clears android\ whether or not --clean is passed, so
-      # there is no "write in place" fallback to try. The only way through is to
-      # name what is holding the folder.
-      #
-      # EBUSY on `rmdir android` - the directory itself, not a file inside it -
-      # almost always means a process has it as its working directory, rather
-      # than merely holding a file open.
+    if ($prebuilt) {
+      Set-Content -Path $hashFile -Value $currentHash -Encoding ascii
+    } elseif ($hasAndroid) {
+      # An existing native project is still buildable. Refusing to build at all
+      # because the folder could not be *replaced* would be the wrong trade —
+      # the APK is usually still correct, and where it is not, saying so is
+      # more useful than stopping.
+      Warn "Could not regenerate android\ - something has the folder open."
+      Warn "Building from the existing native project instead."
+      Warn "If a recent app.json change is missing from the APK, close your dev"
+      Warn "server and any editor with the project open, then run again."
+    } else {
       $blockers = @()
       Get-CimInstance Win32_Process |
-        Where-Object { $_.CommandLine -and $_.CommandLine -match 'expo start|gradle|studio64|adb' } |
+        Where-Object { $_.CommandLine -and $_.CommandLine -match 'expo start|GradleDaemon|studio64|adb' } |
         ForEach-Object {
           $blockers += ("    PID {0}  {1}" -f $_.ProcessId, $_.CommandLine.Substring(0, [Math]::Min(80, $_.CommandLine.Length)))
         }
-
-      $found = if ($blockers.Count) { "`n`nProcesses that could be holding it:`n" + ($blockers -join "`n") } else { "" }
+      $found = if ($blockers.Count) { "`n`nProcesses that may be holding it:`n" + ($blockers -join "`n") } else { "" }
 
       Die @"
-Could not regenerate android\ - something has the folder open.
-
-Note that ``expo prebuild`` clears android\ with or without --clean, so there is
-no fallback that writes in place.
+Could not create android\, and there is no existing one to fall back on.
 
 Close whichever of these is running, then re-run:
-  1. A dev server - ``npm run android`` or ``expo start`` holds the project.
-  2. VS Code's Gradle or Java extension.
-  3. Android Studio with the project open.
-  4. A terminal or Explorer window sitting inside android\.$found
-
-Or skip regeneration entirely, which is safe when app.json has not changed:
-  npm run apk -- -NoPrebuild
+  1. A dev server - ``npm run android`` or ``expo start``.
+  2. Android Studio, or VS Code's Gradle / Java extension.
+  3. A terminal or Explorer window sitting inside android\.$found
 "@
     }
-
-  } elseif (-not (Test-Path (Join-Path $Root 'android'))) {
-    Die "-NoPrebuild was given but there is no android\ folder yet."
   }
 
   # prebuild --clean regenerates android/, so this must run after it, every time.
