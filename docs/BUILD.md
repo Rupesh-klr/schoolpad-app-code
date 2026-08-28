@@ -61,14 +61,17 @@ sheet, video), so test those on a real device before release.
 
 ### An APK to sideload or hand to a tester
 
-**One command.** Either of these:
+**Double-click `make-apk.bat`.** Nothing to type, nothing to edit.
+
+Or from a terminal:
 
 ```powershell
 npm run apk
 ```
 
-or double-click **`make-apk.bat`** in the project folder — same thing, no
-terminal needed.
+Both find this machine's Wi-Fi address on their own and bake it into the build,
+so the APK reaches your API from a phone on the same network. No need to look
+up your IP or remember a flag.
 
 It produces a dated folder and opens it in Explorer, so the next step is
 dragging the file into a chat:
@@ -90,9 +93,21 @@ npm run apk:cloud                                  # force Expo's cloud
 npm run apk:local                                  # force local Gradle
 ```
 
-**Always pass `-ApiBase` for a shared build.** A tester's phone resolves
-`localhost` to itself, not to your laptop, so an APK built without it connects
-to nothing and looks broken with no error worth reading.
+The address is detected, not guessed at: the script takes the interface that
+has a default gateway, lowest metric first. That matters on a laptop with Wi-Fi
+plus disconnected adapters and VPN or WSL virtual ones, which otherwise win by
+enumeration order.
+
+Override it when the API is somewhere else:
+
+```powershell
+npm run apk -- -ApiBase https://api.myagemap.com
+npm run apk -- -ApiPort 8080          # detected IP, different port
+```
+
+Two things a detected LAN address requires: the tester's phone on the same
+Wi-Fi, and your API actually running. It is not reachable from outside the
+network - for that, deploy the API and pass its public URL.
 
 #### Which mode it picks
 

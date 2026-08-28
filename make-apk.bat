@@ -2,11 +2,13 @@
 REM ---------------------------------------------------------------------------
 REM  Double-click this to build a shareable release APK.
 REM
-REM  Exists because "open a terminal, cd to the folder, run npm run apk" is
-REM  three steps that go wrong in different ways. This is one.
+REM  Nothing to type and nothing to edit. The script finds this machine's Wi-Fi
+REM  address on its own and bakes it into the build, so the APK reaches your API
+REM  from a phone on the same network.
 REM
-REM  From a terminal you can pass the same options through:
+REM  From a terminal you can still override anything:
 REM      make-apk.bat -ApiBase https://api.myagemap.com
+REM      make-apk.bat -ApiPort 8080
 REM      make-apk.bat -Bump patch
 REM ---------------------------------------------------------------------------
 
@@ -14,21 +16,23 @@ cd /d "%~dp0"
 
 echo.
 echo   Building the Learning App release APK...
+echo   (first build takes 10-20 minutes; later ones are much faster)
 echo.
 
-REM -ExecutionPolicy Bypass because the default Windows policy blocks unsigned
-REM local scripts, and it applies to this process only - nothing is changed
-REM system-wide.
+REM -ExecutionPolicy Bypass because Windows blocks unsigned local scripts by
+REM default. It applies to this one process - nothing is changed system-wide.
 powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\build-apk.ps1" %*
 
-REM Hold the window open on failure so the error is readable. Without this a
-REM double-click that fails just closes, showing nothing.
+REM Hold the window open either way. On failure the error stays readable; on
+REM success the path to the APK does.
 if errorlevel 1 (
   echo.
-  echo   The build failed. The error is above.
+  echo   The build FAILED. The error is above.
   echo.
-  pause
-  exit /b 1
+) else (
+  echo.
+  echo   Done. The release folder should have opened in Explorer.
+  echo.
 )
 
 pause

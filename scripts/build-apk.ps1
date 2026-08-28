@@ -34,9 +34,12 @@ param(
   [ValidateSet('auto', 'eas', 'local')]
   [string]$Mode = 'auto',
 
-  # Baked into the bundle at build time. A tester's phone cannot reach your
-  # laptop's localhost, so this must be a hostname the device can resolve.
+  # Baked into the bundle at build time. Left empty, this machine's LAN address
+  # is detected and used, which is what a tester's phone can actually reach.
   [string]$ApiBase = '',
+
+  # Port the API listens on, used only when ApiBase is being detected.
+  [int]$ApiPort = 8100,
 
   [ValidateSet('none', 'patch', 'minor', 'major')]
   [string]$Bump = 'none',
@@ -114,15 +117,57 @@ New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
 Say "version: $Version (versionCode $VersionCode)"
 Say "output:  $OutDir"
 
-if ($ApiBase -ne '') {
-  $env:EXPO_PUBLIC_API_BASE = $ApiBase
-  Say "api:     $ApiBase"
-} else {
-  # localhost in a shared APK is the single most common "it doesn't work on my
-  # phone" - the device resolves localhost to itself, not to your machine.
-  Warn "No -ApiBase given. The APK will use whatever .env or eas.json sets."
-  Warn "If that is localhost, testers' phones will reach nothing."
+<#
+  Work out which address the APK should call.
+
+  A phone cannot reach your laptop's localhost - it resolves that to itself - so
+  an APK built without a real address connects to nothing and looks broken with
+  no error worth reading. Rather than make that a flag people must remember,
+  detect this machine's LAN address and use it.
+
+  Detection picks the interface that actually carries traffic: the one with a
+  default gateway, lowest metric first. Sorting by metric matters on a laptop
+  with Wi-Fi plus disconnected adapters and VPN or WSL virtual ones, which
+  otherwise win by luck of enumeration order.
+#>
+function Get-LanAddress {
+  try {
+    $best = Get-NetIPConfiguration -ErrorAction Stop |
+            Where-Object { $_.IPv4DefaultGateway -and $_.NetAdapter.Status -eq 'Up' } |
+            Sort-Object { $_.NetIPv4Interface.InterfaceMetric } |
+            Select-Object -First 1
+    if ($best) { return $best.IPv4Address.IPAddress }
+  } catch { }
+
+  # Fallback for older PowerShell or an unusual adapter set.
+  try {
+    return (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
+            Where-Object {
+              $_.IPAddress -ne '127.0.0.1' -and
+              $_.IPAddress -notlike '169.254.*' -and
+              $_.PrefixOrigin -in @('Dhcp', 'Manual')
+            } |
+            Sort-Object InterfaceMetric |
+            Select-Object -First 1 -ExpandProperty IPAddress)
+  } catch { return $null }
 }
+
+if ($ApiBase -eq '') {
+  $lan = Get-LanAddress
+  if ($lan) {
+    $ApiBase = "http://${lan}:$ApiPort"
+    Say "api:     $ApiBase  (detected)"
+    Say "         testers must be on the same Wi-Fi, and the API must be running"
+  } else {
+    Warn "Could not detect a LAN address. The APK will use whatever .env sets."
+    Warn "If that is localhost, testers' phones will reach nothing."
+    Warn "Pass one explicitly:  -ApiBase http://192.168.1.6:$ApiPort"
+  }
+} else {
+  Say "api:     $ApiBase"
+}
+
+if ($ApiBase -ne '') { $env:EXPO_PUBLIC_API_BASE = $ApiBase }
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
@@ -315,7 +360,7 @@ To install on an Android phone:
 
 This APK is for direct sharing and testing. The Play Store needs an AAB:
   npm run build:android:aab
-"@ | Out-File -FilePath (Join-Path $OutDir 'README.txt') -Encoding utf8
+"@ | Out-File -FilePath (Join-Path $OutDir 'README.txt') -Encoding ascii
 
 Write-Host ""
 Write-Host "  Done" -ForegroundColor Green
