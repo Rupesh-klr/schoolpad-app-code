@@ -211,3 +211,6 @@ to copying if the target app is missing.
   best; a tighter poll spends a child's mobile data to learn nothing.
 - Icons are emoji, not an icon font — no bundle weight, no missing glyphs, but
   they render differently per platform.
+$env:GRADLE_HEAP='2560m'; npm run apk
+And on a machine with room: npm run apk -- -MaxWorkers 6.
+

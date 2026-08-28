@@ -345,6 +345,13 @@ If it ran out of memory, give it more for one run:
   $built    = Join-Path $Root 'android\app\build\outputs\apk\release\app-release.apk'
   $unsigned = Join-Path $Root 'android\app\build\outputs\apk\release\app-release-unsigned.apk'
 
+  # Recreate the output folder rather than trusting the one made before the
+  # build. A release build runs for minutes, and anything can happen to a
+  # directory in that time - clearing out old builds while waiting is the
+  # obvious one. Failing at the copy after a successful build wastes the whole
+  # run for no reason.
+  New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+
   if (Test-Path $built) {
     Copy-Item $built $OutFile -Force
   } elseif (Test-Path $unsigned) {
