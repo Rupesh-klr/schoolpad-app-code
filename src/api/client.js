@@ -9,7 +9,40 @@ import * as SecureStore from 'expo-secure-store';
  * everywhere instead of in whichever screens remembered to implement it.
  */
 
-const BASE = (process.env.EXPO_PUBLIC_API_BASE || defaultBase()).replace(/\/$/, '');
+/**
+ * The API's address, normalised.
+ *
+ * A value entered without a scheme — `api.example.com` rather than
+ * `https://api.example.com` — is the failure this guards against. Without a
+ * scheme the browser treats it as a *relative path*, so every call becomes
+ * `https://<the-site>/api.example.com/api/...` and 404s. Nothing about that
+ * URL suggests a missing `https://`, and the value looks right in the hosting
+ * panel, so it is a slow thing to find.
+ *
+ * Defaulting to https rather than http: this is only reached for a hostname
+ * typed by hand, which in practice is a deployed API, and silently downgrading
+ * one to plaintext is worse than a connection error.
+ */
+function normaliseBase(raw) {
+  const value = String(raw || '').trim().replace(/\/+$/, '');
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) return value;
+
+  // A bare host:port on a private address is a development machine, where
+  // there is no certificate to speak of.
+  const isLocal = /^(localhost|127\.0\.0\.1|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(value);
+  const scheme = isLocal ? 'http://' : 'https://';
+
+  if (__DEV__) {
+    console.warn(
+      `[api] EXPO_PUBLIC_API_BASE has no scheme ("${value}"). ` +
+      `Using ${scheme}${value}. Set it with https:// to be explicit.`,
+    );
+  }
+  return `${scheme}${value}`;
+}
+
+const BASE = normaliseBase(process.env.EXPO_PUBLIC_API_BASE) || defaultBase();
 
 /**
  * Android's emulator cannot see the host's `localhost` — that address is the
