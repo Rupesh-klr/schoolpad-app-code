@@ -61,18 +61,21 @@ sheet, video), so test those on a real device before release.
 
 ### An APK to sideload or hand to a tester
 
-**One command on Windows:**
+**One command.** Either of these:
 
 ```powershell
 npm run apk
 ```
 
-Builds, downloads, and drops the file in a dated folder, then opens it in
-Explorer so you can drag it straight into a chat:
+or double-click **`make-apk.bat`** in the project folder — same thing, no
+terminal needed.
+
+It produces a dated folder and opens it in Explorer, so the next step is
+dragging the file into a chat:
 
 ```
 release/
-  2026-08-27_v1.0.0/
+  2026-08-28_v1.0.0/
     app-release.apk    <- send this to testers
     README.txt         <- version, API base, size, install steps
 ```
@@ -82,25 +85,50 @@ Options:
 ```powershell
 npm run apk -- -ApiBase https://api.myagemap.com   # bake in a reachable server
 npm run apk -- -Bump patch                         # 1.0.0 -> 1.0.1, versionCode +1
-npm run apk:local                                  # build with Gradle instead of the cloud
+npm run apk -- -NoPrebuild                         # skip regenerating android/
+npm run apk:cloud                                  # force Expo's cloud
+npm run apk:local                                  # force local Gradle
 ```
 
 **Always pass `-ApiBase` for a shared build.** A tester's phone resolves
 `localhost` to itself, not to your laptop, so an APK built without it connects
 to nothing and looks broken with no error worth reading.
 
-`-Mode eas` (the default) builds on Expo's servers — no Android Studio, no JDK,
-no Gradle, and it signs the APK for you. `-Mode local` needs `ANDROID_HOME` and
-a JDK 17, and will refuse to hand you an unsigned APK rather than let you find
-out at install time.
+#### Which mode it picks
 
-Underneath it is the same thing as:
+`npm run apk` defaults to `-Mode auto`:
 
-```bash
-npm run build:android:apk       # eas build --platform android --profile preview
+| Condition | Mode | Needs |
+|---|---|---|
+| `ANDROID_HOME` set **and** a JDK on PATH | **local** | Android Studio + JDK 17+. No Expo account. |
+| otherwise | **eas** | An Expo account. No Android SDK. |
+
+This machine has both, so it builds locally — which is faster after the first
+run and works with no Expo account at all.
+
+#### The signing key
+
+React Native's generated project signs release builds with the **debug** key.
+That APK installs, but every machine's debug key differs, so a build from
+another laptop cannot update it — Android refuses an update whose signature
+changed.
+
+So the first local build creates one stable release key:
+
+```
+~/.keys/learning-app/
+  release.keystore      <- the key
+  credentials.json      <- its password, mode 600
 ```
 
-An APK installs directly on a device. It is the format for testing.
+**Back that folder up.** Lose it and the only way to ship an update is a new
+Play listing under a new package name. It lives outside the repo on purpose;
+`*.keystore` is gitignored as a second line of defence.
+
+`scripts/ensure-signing.mjs` creates it, writes the credentials into
+`android/gradle.properties`, and repoints the release build type at it. It runs
+after every `expo prebuild`, because `--clean` regenerates `android/` and undoes
+the patch.
 
 ### An AAB for the Play Store
 
@@ -224,10 +252,10 @@ The server must rewrite unknown paths to `index.html`, or a refresh on
 ## 6. Releasing all three at once
 
 ```bash
-node scripts/release.js                     # patch bump, then web + android + ios
-node scripts/release.js --minor
-node scripts/release.js --only web,android
-node scripts/release.js --dry-run           # show the commands, change nothing
+node scripts/release.mjs                     # patch bump, then web + android + ios
+node scripts/release.mjs --minor
+node scripts/release.mjs --only web,android
+node scripts/release.mjs --dry-run           # show the commands, change nothing
 ```
 
 It bumps `version` in `app.json` and `package.json`, increments Android's
@@ -247,6 +275,9 @@ version but forgot the versionCode" happening on a Friday.
 | Blank white screen on web | Check the browser console; usually a native-only module imported unguarded |
 | `Unable to resolve module expo-router` | `npm run setup` has not been run |
 | Env change has no effect | `EXPO_PUBLIC_*` is baked at bundle time — restart with `npm start -- --clear` |
-| Play rejects the AAB | `versionCode` was not incremented; `node scripts/release.js` handles it |
+| Play rejects the AAB | `versionCode` was not incremented; `node scripts/release.mjs` handles it |
 | iOS build fails on missing headers | Opened `.xcodeproj` instead of `.xcworkspace` |
 | Blur looks flat on an old Android | Deliberate — see the `CAN_BLUR` note in `src/components/Glass.js` |
+| `Failed to bootstrap Gradle` / `NoClassDefFoundError: org/gradle/api/specs/Spec` | The cached Gradle distribution is corrupt. Delete `~/.gradle/wrapper/dists/gradle-<version>-bin/` and rebuild — the wrapper re-downloads it. |
+| Deleting that folder says `resource busy` | A JVM has the jars memory-mapped. VS Code's Java extension is the usual culprit — close VS Code, or delete just enough files that Gradle re-downloads the rest. |
+| `gradlew.bat` fails from Git Bash | `JAVA_HOME` is an MSYS path (`/c/Users/...`); the batch file needs `C:\Users\...`. Use PowerShell, or `npm run apk`, which sets it correctly. |
